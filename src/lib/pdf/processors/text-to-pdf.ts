@@ -62,6 +62,7 @@ export const AVAILABLE_FONTS = [
   { id: 'noto-sans-kr', name: 'Noto Sans KR (한국어)', type: 'noto', url: 'https://cdn.jsdelivr.net/gh/googlefonts/noto-cjk@main/Sans/OTF/Korean/NotoSansCJKkr-Regular.otf' },
   { id: 'noto-sans-arabic', name: 'Noto Sans Arabic (العربية)', type: 'noto', url: 'https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSansArabic/NotoSansArabic-Regular.ttf' },
   { id: 'noto-sans-hebrew', name: 'Noto Sans Hebrew (עברית)', type: 'noto', url: 'https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSansHebrew/NotoSansHebrew-Regular.ttf' },
+  { id: 'sarabun', name: 'Sarabun (ไทย / Latin)', type: 'noto', url: '/fonts/Sarabun-Regular.ttf' },
   { id: 'noto-sans-thai', name: 'Noto Sans Thai (ไทย)', type: 'noto', url: '/fonts/NotoSansThai-Regular.ttf' },
   { id: 'noto-sans-devanagari', name: 'Noto Sans Devanagari (हिन्दी)', type: 'noto', url: 'https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/unhinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Regular.ttf' },
 ] as const;
@@ -195,7 +196,7 @@ async function loadFont(fontId: string, url: string): Promise<ArrayBuffer> {
     return cachedFont;
   }
 
-  if (fontId === 'noto-sans-thai') {
+  if (fontId === 'sarabun' || fontId === 'noto-sans-thai') {
     const localBuf = await loadFontBuffer('thai');
     if (localBuf) {
       fontCache.set(fontId, localBuf);
@@ -293,7 +294,7 @@ export class TextToPDFProcessor extends BasePDFProcessor {
       let selectedFontId = pdfOptions.fontId;
       if (selectedFontId === 'helvetica' || !selectedFontId) {
         if (containsThai(combinedText)) {
-          selectedFontId = 'noto-sans-thai';
+          selectedFontId = 'sarabun';
         } else if (containsCJK(combinedText)) {
           selectedFontId = 'noto-sans-sc';
         }

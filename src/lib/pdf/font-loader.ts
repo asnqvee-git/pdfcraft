@@ -31,9 +31,9 @@ export function detectScript(text: string): ScriptType {
 
 const FONT_CONFIGS: Record<ScriptType, { id: string; url: string; fallbackUrl?: string }> = {
   thai: {
-    id: 'noto-sans-thai',
-    url: '/fonts/NotoSansThai-Regular.ttf',
-    fallbackUrl: 'https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSansThai/NotoSansThai-Regular.ttf',
+    id: 'sarabun',
+    url: '/fonts/Sarabun-Regular.ttf',
+    fallbackUrl: 'https://raw.githubusercontent.com/google/fonts/main/ofl/sarabun/Sarabun-Regular.ttf',
   },
   cjk: {
     id: 'noto-sans-sc',
