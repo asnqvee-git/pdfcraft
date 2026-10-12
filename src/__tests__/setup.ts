@@ -89,3 +89,21 @@ if (typeof window.PointerEvent === 'undefined') {
     value: MockPointerEvent,
   });
 }
+
+// Ensure localStorage works under Node 22/26 without --localstorage-file
+if (!globalThis.localStorage || typeof globalThis.localStorage.clear !== 'function') {
+  const store = new Map<string, string>();
+  const mockStorage = {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => store.set(key, String(value)),
+    removeItem: (key: string) => store.delete(key),
+    clear: () => store.clear(),
+    key: (index: number) => Array.from(store.keys())[index] ?? null,
+    get length() { return store.size; },
+  };
+  Object.defineProperty(globalThis, 'localStorage', { value: mockStorage, configurable: true, writable: true });
+  if (typeof window !== 'undefined') {
+    Object.defineProperty(window, 'localStorage', { value: mockStorage, configurable: true, writable: true });
+  }
+}
+

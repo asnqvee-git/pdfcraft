@@ -9,6 +9,7 @@ import type { ProcessInput, ProcessOutput, ProgressCallback } from '@/types/pdf'
 import { PDFErrorCode } from '@/types/pdf';
 import { BasePDFProcessor } from '../processor';
 import { loadPdfLib } from '../loader';
+import { getFontForText } from '../font-loader';
 import type { PDFPage, PDFFont, PDFImage } from 'pdf-lib';
 
 
@@ -39,97 +40,6 @@ export interface WatermarkOptions {
   repeatSpacingX?: number;
   /** Vertical spacing between repeated watermarks (points) */
   repeatSpacingY?: number;
-}
-
-// Noto fonts for CJK support
-const CJK_FONT_URL = 'https://raw.githack.com/googlefonts/noto-cjk/main/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf';
-
-// Font cache
-const fontCache: Map<string, ArrayBuffer> = new Map();
-const DB_NAME = 'pdfcraft-fonts';
-const DB_VERSION = 1;
-const STORE_NAME = 'fonts';
-
-async function openFontDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onerror = () => reject(request.error);
-    request.onsuccess = () => resolve(request.result);
-    request.onupgradeneeded = (event) => {
-      const db = (event.target as IDBOpenDBRequest).result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME);
-      }
-    };
-  });
-}
-
-async function getCachedFontFromDB(fontId: string): Promise<ArrayBuffer | null> {
-  try {
-    const db = await openFontDB();
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction(STORE_NAME, 'readonly');
-      const store = transaction.objectStore(STORE_NAME);
-      const request = store.get(fontId);
-      request.onsuccess = () => resolve(request.result || null);
-      request.onerror = () => reject(request.error);
-    });
-  } catch {
-    return null;
-  }
-}
-
-async function saveFontToDB(fontId: string, fontBuffer: ArrayBuffer): Promise<void> {
-  try {
-    const db = await openFontDB();
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction(STORE_NAME, 'readwrite');
-      const store = transaction.objectStore(STORE_NAME);
-      const request = store.put(fontBuffer, fontId);
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
-    });
-  } catch {
-    // Ignore IndexedDB errors
-  }
-}
-
-async function loadCJKFont(): Promise<ArrayBuffer> {
-  const fontId = 'noto-sans-sc';
-
-  // Check memory cache first
-  if (fontCache.has(fontId)) {
-    return fontCache.get(fontId)!;
-  }
-
-  // Check IndexedDB cache
-  const cachedFont = await getCachedFontFromDB(fontId);
-  if (cachedFont) {
-    fontCache.set(fontId, cachedFont);
-    return cachedFont;
-  }
-
-  // Fetch from URL
-  const response = await fetch(CJK_FONT_URL);
-  if (!response.ok) {
-    throw new Error(`Failed to load CJK font`);
-  }
-
-  const buffer = await response.arrayBuffer();
-
-  // Cache in memory and IndexedDB
-  fontCache.set(fontId, buffer);
-  await saveFontToDB(fontId, buffer);
-
-  return buffer;
-}
-
-/**
- * Check if text contains non-ASCII characters (CJK, etc.)
- */
-function containsNonAscii(text: string): boolean {
-  // eslint-disable-next-line no-control-regex
-  return /[^\x00-\x7F]/.test(text);
 }
 
 export class WatermarkProcessor extends BasePDFProcessor {
@@ -173,19 +83,13 @@ export class WatermarkProcessor extends BasePDFProcessor {
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfLib.PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
 
-      // Check if we need CJK font support
-      const needsCJKFont = wmOptions.type === 'text' && wmOptions.text && containsNonAscii(wmOptions.text);
-
+      // Check if we need Unicode / Thai / CJK font support
       let font: Awaited<ReturnType<typeof pdf.embedFont>>;
 
-      if (needsCJKFont) {
-        this.updateProgress(25, 'Loading CJK font...');
-        const fontkit = await import('@pdf-lib/fontkit');
-        pdf.registerFontkit(fontkit.default || fontkit);
-
-        const fontBytes = await loadCJKFont();
-        this.updateProgress(28, 'Embedding font...');
-        font = await pdf.embedFont(fontBytes, { subset: false });
+      if (wmOptions.type === 'text' && wmOptions.text) {
+        this.updateProgress(25, 'Loading font...');
+        const standardFont = await pdf.embedFont(pdfLib.StandardFonts.HelveticaBold);
+        font = await getFontForText(pdf, wmOptions.text, standardFont);
       } else {
         font = await pdf.embedFont(pdfLib.StandardFonts.HelveticaBold);
       }

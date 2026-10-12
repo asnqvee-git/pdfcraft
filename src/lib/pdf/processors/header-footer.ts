@@ -7,6 +7,7 @@ import type { ProcessInput, ProcessOutput, ProgressCallback } from '@/types/pdf'
 import { PDFErrorCode } from '@/types/pdf';
 import { BasePDFProcessor } from '../processor';
 import { loadPdfLib } from '../loader';
+import { getFontForText } from '../font-loader';
 
 export interface HeaderFooterOptions {
   header?: {
@@ -54,7 +55,13 @@ export class HeaderFooterProcessor extends BasePDFProcessor {
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfLib.PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
 
-      const font = await pdf.embedFont(pdfLib.StandardFonts.Helvetica);
+      const allText = [
+        hfOptions.header?.left, hfOptions.header?.center, hfOptions.header?.right,
+        hfOptions.footer?.left, hfOptions.footer?.center, hfOptions.footer?.right
+      ].filter(Boolean).join(' ');
+
+      const standardFont = await pdf.embedFont(pdfLib.StandardFonts.Helvetica);
+      const font = await getFontForText(pdf, allText, standardFont);
       const totalPages = pdf.getPageCount();
       const currentDate = new Date().toLocaleDateString();
 

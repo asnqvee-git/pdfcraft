@@ -160,6 +160,11 @@ describe('Software Updater', () => {
         ],
       };
 
+      Object.defineProperty(window.navigator, 'userAgent', {
+        value: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        configurable: true,
+      });
+
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => mockGitHubResponse,

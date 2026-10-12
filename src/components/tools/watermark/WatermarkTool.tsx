@@ -294,7 +294,7 @@ export function WatermarkTool({ className = '' }: WatermarkToolProps) {
 
     if (watermarkType === 'text') {
       const scaledFontSize = Math.max(10, Math.round(fontSize * scale));
-      ctx.font = `bold ${scaledFontSize}px "Noto Sans SC", sans-serif`;
+      ctx.font = `bold ${scaledFontSize}px "Noto Sans Thai", "Noto Sans SC", sans-serif`;
       ctx.fillStyle = textColor;
       ctx.globalAlpha = textOpacity;
       ctx.textAlign = 'center';

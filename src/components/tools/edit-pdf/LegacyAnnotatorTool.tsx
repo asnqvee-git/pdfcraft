@@ -722,9 +722,10 @@ export function LegacyAnnotatorTool({
 
                 const originalSave = pdfLib.PDFDocument.prototype.save;
                 pdfLib.PDFDocument.prototype.save = async function(saveOptions) {
-                  console.log('[PDFCraft Patch] Intercepting save to inspect for Chinese text...');
+                  console.log('[PDFCraft Patch] Intercepting save to inspect for Unicode text...');
                   
-                  let hasChinese = false;
+                  let fontPath = '';
+                  let fontName = '';
                   
                   // Inspect the annotation store inside PDFJS Annotation Extension
                   const annotationExtension = window.pdfjsAnnotationExtensionInstance;
@@ -733,29 +734,35 @@ export function LegacyAnnotatorTool({
                     : null;
                   if (store && store.annotations) {
                     store.annotations.forEach(ann => {
-                      if (ann.name === 'freeText' && /[\u4e00-\u9fa5]/.test(ann.text || '')) {
-                        hasChinese = true;
+                      if (ann.name === 'freeText' && ann.text) {
+                        if (/[\u0E00-\u0E7F]/.test(ann.text)) {
+                          fontPath = '/fonts/NotoSansThai-Regular.ttf';
+                          fontName = 'NotoSansThai';
+                        } else if (/[\u4e00-\u9fa5]/.test(ann.text) && !fontPath) {
+                          fontPath = 'https://cdn.jsdelivr.net/gh/googlefonts/noto-cjk@main/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf';
+                          fontName = 'NotoSansSC';
+                        }
                       }
                     });
                   }
 
-                  if (hasChinese) {
+                  if (fontPath) {
                     try {
-                      console.log('[PDFCraft Patch] Chinese text found. Embedding NotoSansSC-Regular font...');
-                      const fontBytes = await fetch('/fonts/NotoSansSC-Regular.ttf').then(res => res.arrayBuffer());
-                      const customFont = await this.embedFont(fontBytes, { subset: true });
+                      console.log('[PDFCraft Patch] Unicode text found. Embedding ' + fontName + ' font...');
+                      const fontBytes = await fetch(fontPath).then(res => res.arrayBuffer());
+                      const customFont = await this.embedFont(fontBytes, { subset: false });
                       
                       // Intercept subsequent font loading requests for Helvetica inside pdf-lib
                       const originalEmbedFont = this.embedFont;
                       this.embedFont = async function(fontToEmbed, embedOpts) {
                         if (fontToEmbed === pdfLib.StandardFonts.Helvetica || fontToEmbed === 'Helvetica') {
-                          console.log('[PDFCraft Patch] Redirected Helvetica embed to NotoSansSC font');
+                          console.log('[PDFCraft Patch] Redirected Helvetica embed to ' + fontName + ' font');
                           return customFont;
                         }
                         return originalEmbedFont.call(this, fontToEmbed, embedOpts);
                       };
                     } catch (e) {
-                      console.error('[PDFCraft Patch] Failed to embed Chinese font subset', e);
+                      console.error('[PDFCraft Patch] Failed to embed ' + fontName + ' font', e);
                     }
                   }
 

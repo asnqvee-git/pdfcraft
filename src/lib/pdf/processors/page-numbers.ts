@@ -7,6 +7,7 @@ import type { ProcessInput, ProcessOutput, ProgressCallback } from '@/types/pdf'
 import { PDFErrorCode } from '@/types/pdf';
 import { BasePDFProcessor } from '../processor';
 import { loadPdfLib } from '../loader';
+import { getFontForText } from '../font-loader';
 
 export interface PageNumberOptions {
   position?: 'bottom-center' | 'bottom-left' | 'bottom-right' | 'top-center' | 'top-left' | 'top-right';
@@ -59,7 +60,9 @@ export class PageNumbersProcessor extends BasePDFProcessor {
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfLib.PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
 
-      const font = await pdf.embedFont(pdfLib.StandardFonts.Helvetica);
+      const checkText = `${pageNumOptions.prefix || ''} ${pageNumOptions.suffix || ''} ${pageNumOptions.customFormat || ''}`;
+      const standardFont = await pdf.embedFont(pdfLib.StandardFonts.Helvetica);
+      const font = await getFontForText(pdf, checkText, standardFont);
       const totalPages = pdf.getPageCount();
       const skipSet = new Set(pageNumOptions.skipPages || []);
 

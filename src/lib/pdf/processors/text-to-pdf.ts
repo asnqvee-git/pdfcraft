@@ -47,21 +47,23 @@ export interface TextColor {
 /**
  * Available font families with their display names and URLs
  */
+import { containsThai, containsCJK, loadFontBuffer } from '../font-loader';
+
 export const AVAILABLE_FONTS = [
   // Standard PDF fonts (no embedding needed, small file size)
   { id: 'helvetica', name: 'Helvetica (Sans-serif)', type: 'standard' },
   { id: 'times', name: 'Times (Serif)', type: 'standard' },
   { id: 'courier', name: 'Courier (Monospace)', type: 'standard' },
   // Noto fonts for international support
-  { id: 'noto-sans', name: 'Noto Sans (Latin/Cyrillic)', type: 'noto', url: 'https://raw.githack.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf' },
-  { id: 'noto-sans-sc', name: 'Noto Sans SC (简体中文)', type: 'noto', url: 'https://raw.githack.com/googlefonts/noto-cjk/main/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf' },
-  { id: 'noto-sans-tc', name: 'Noto Sans TC (繁體中文)', type: 'noto', url: 'https://raw.githack.com/googlefonts/noto-cjk/main/Sans/OTF/TraditionalChinese/NotoSansCJKtc-Regular.otf' },
-  { id: 'noto-sans-jp', name: 'Noto Sans JP (日本語)', type: 'noto', url: 'https://raw.githack.com/googlefonts/noto-cjk/main/Sans/OTF/Japanese/NotoSansCJKjp-Regular.otf' },
-  { id: 'noto-sans-kr', name: 'Noto Sans KR (한국어)', type: 'noto', url: 'https://raw.githack.com/googlefonts/noto-cjk/main/Sans/OTF/Korean/NotoSansCJKkr-Regular.otf' },
-  { id: 'noto-sans-arabic', name: 'Noto Sans Arabic (العربية)', type: 'noto', url: 'https://raw.githack.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSansArabic/NotoSansArabic-Regular.ttf' },
-  { id: 'noto-sans-hebrew', name: 'Noto Sans Hebrew (עברית)', type: 'noto', url: 'https://raw.githack.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSansHebrew/NotoSansHebrew-Regular.ttf' },
-  { id: 'noto-sans-thai', name: 'Noto Sans Thai (ไทย)', type: 'noto', url: 'https://raw.githack.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSansThai/NotoSansThai-Regular.ttf' },
-  { id: 'noto-sans-devanagari', name: 'Noto Sans Devanagari (हिन्दी)', type: 'noto', url: 'https://raw.githack.com/googlefonts/noto-fonts/main/unhinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Regular.ttf' },
+  { id: 'noto-sans', name: 'Noto Sans (Latin/Cyrillic)', type: 'noto', url: 'https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSans/NotoSans-Regular.ttf' },
+  { id: 'noto-sans-sc', name: 'Noto Sans SC (简体中文)', type: 'noto', url: 'https://cdn.jsdelivr.net/gh/googlefonts/noto-cjk@main/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf' },
+  { id: 'noto-sans-tc', name: 'Noto Sans TC (繁體中文)', type: 'noto', url: 'https://cdn.jsdelivr.net/gh/googlefonts/noto-cjk@main/Sans/OTF/TraditionalChinese/NotoSansCJKtc-Regular.otf' },
+  { id: 'noto-sans-jp', name: 'Noto Sans JP (日本語)', type: 'noto', url: 'https://cdn.jsdelivr.net/gh/googlefonts/noto-cjk@main/Sans/OTF/Japanese/NotoSansCJKjp-Regular.otf' },
+  { id: 'noto-sans-kr', name: 'Noto Sans KR (한국어)', type: 'noto', url: 'https://cdn.jsdelivr.net/gh/googlefonts/noto-cjk@main/Sans/OTF/Korean/NotoSansCJKkr-Regular.otf' },
+  { id: 'noto-sans-arabic', name: 'Noto Sans Arabic (العربية)', type: 'noto', url: 'https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSansArabic/NotoSansArabic-Regular.ttf' },
+  { id: 'noto-sans-hebrew', name: 'Noto Sans Hebrew (עברית)', type: 'noto', url: 'https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSansHebrew/NotoSansHebrew-Regular.ttf' },
+  { id: 'noto-sans-thai', name: 'Noto Sans Thai (ไทย)', type: 'noto', url: '/fonts/NotoSansThai-Regular.ttf' },
+  { id: 'noto-sans-devanagari', name: 'Noto Sans Devanagari (हिन्दी)', type: 'noto', url: 'https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/unhinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Regular.ttf' },
 ] as const;
 
 export type FontId = typeof AVAILABLE_FONTS[number]['id'];
@@ -193,6 +195,15 @@ async function loadFont(fontId: string, url: string): Promise<ArrayBuffer> {
     return cachedFont;
   }
 
+  if (fontId === 'noto-sans-thai') {
+    const localBuf = await loadFontBuffer('thai');
+    if (localBuf) {
+      fontCache.set(fontId, localBuf);
+      await saveFontToDB(fontId, localBuf);
+      return localBuf;
+    }
+  }
+
   // Fetch from URL
   const response = await fetch(url);
 
@@ -278,8 +289,18 @@ export class TextToPDFProcessor extends BasePDFProcessor {
 
       const pdfDoc = await pdfLib.PDFDocument.create();
 
+      // Auto-detect font if default standard font was selected but text contains Thai or non-Latin
+      let selectedFontId = pdfOptions.fontId;
+      if (selectedFontId === 'helvetica' || !selectedFontId) {
+        if (containsThai(combinedText)) {
+          selectedFontId = 'noto-sans-thai';
+        } else if (containsCJK(combinedText)) {
+          selectedFontId = 'noto-sans-sc';
+        }
+      }
+
       // Get selected font config
-      const fontConfig = AVAILABLE_FONTS.find(f => f.id === pdfOptions.fontId) || AVAILABLE_FONTS[0];
+      const fontConfig = AVAILABLE_FONTS.find(f => f.id === selectedFontId) || AVAILABLE_FONTS[0];
 
       let font: Awaited<ReturnType<typeof pdfDoc.embedFont>>;
 
@@ -299,9 +320,10 @@ export class TextToPDFProcessor extends BasePDFProcessor {
 
         this.updateProgress(30, 'Downloading font...');
         const fontBytes = await loadFont(fontConfig.id, (fontConfig as { url: string }).url);
+        const fontArray = fontBytes instanceof Uint8Array ? fontBytes : new Uint8Array(fontBytes);
 
         this.updateProgress(40, 'Embedding font...');
-        font = await pdfDoc.embedFont(fontBytes, { subset: false });
+        font = await pdfDoc.embedFont(fontArray, { subset: false });
       }
 
       this.updateProgress(50, 'Creating PDF pages...');
